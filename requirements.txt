@@ -1,0 +1,2 @@
+resend>=2.0.0
+backports.zoneinfo;python_version<"3.9"

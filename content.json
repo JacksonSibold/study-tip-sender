@@ -1,0 +1,20 @@
+{
+  "tips": [
+    "Explain a concept in your own words before checking your notes."
+  ],
+  "concepts": [
+    "A mutex protects a critical section shared by multiple threads."
+  ],
+  "definitions": [
+    {
+      "term": "Deadlock",
+      "definition": "Tasks wait indefinitely for resources held by one another."
+    }
+  ],
+  "questions": [
+    {
+      "q": "Why use persistent scheduler state?",
+      "a": "To avoid repeating a completed delivery after a restart."
+    }
+  ]
+}
