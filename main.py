@@ -186,6 +186,8 @@ def send_sms(message: str) -> bool:
 def run() -> None:
     if not PHONE_NUMBER or not RESEND_API_KEY:
         raise SystemExit("Set PHONE_NUMBER and RESEND_API_KEY before running the sender.")
+    if not (PHONE_NUMBER.isascii() and PHONE_NUMBER.isdigit()):
+        raise SystemExit("PHONE_NUMBER must contain digits only, e.g. 15555550100 (no +, spaces or dashes).")
     log("Study Tip Sender starting.")
     log(f"Recipient: {TO_ADDRESS}")
     log(f"Send hours (MT): {sorted(SEND_HOURS)}")

@@ -128,6 +128,11 @@ class StateTests(unittest.TestCase):
    self.assertIs(sender.reset_state_if_new_day(state,'2027-05-01'),state)
    self.assertFalse(sender.STATE_FILE.exists())
 class RunTests(unittest.TestCase):
+ def test_phone_number_must_be_digits_only(self):
+  for phone in ('+15555550100','555-0100','1555 0100'):
+   with self.subTest(phone=phone),tempfile.TemporaryDirectory() as d,patch.object(sender,'PHONE_NUMBER',phone),patch.object(sender,'RESEND_API_KEY','test-only'),patch.object(sender,'STATE_FILE',Path(d)/'s.json'),patch.object(sender,'load_content',lambda:['x']),patch.object(sender.time,'sleep',side_effect=KeyboardInterrupt):
+    with self.assertRaises(SystemExit) as cm:sender.run()
+    self.assertIn('PHONE_NUMBER',str(cm.exception.code))
  def test_unloadable_content_exits_with_nonzero_status(self):
   with tempfile.TemporaryDirectory() as d,patch.object(sender,'PHONE_NUMBER','15555550100'),patch.object(sender,'RESEND_API_KEY','test-only'),patch.object(sender,'CONTENT_FILE',Path(d)/'missing.json'):
    with self.assertRaises(SystemExit) as cm:sender.run()
