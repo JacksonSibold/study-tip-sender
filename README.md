@@ -41,6 +41,14 @@ Each item is sent as one text with a prefix for its kind (`Tip:`, `Concept:`, `D
 
 Validation runs at startup. A file that is not a JSON object, a section that is not a list, a blank string, or a definition or question missing a field stops the sender with a message naming the bad entry, and the process exits with status 1.
 
+## Schedule, state and retries
+
+The sender checks the clock every minute. It sends at minute 0 of each hour listed in `SEND_HOURS` (08:00, 10:00, 12:00 and so on through 22:00, Mountain Time), so the schedule is every two hours. Each slot sends one randomly chosen item that has not yet been sent that day. When every item has been used, the pool starts again.
+
+A send is attempted up to three times, waiting 5 s and then 10 s between attempts. If all attempts fail, the slot is not marked as sent and is not retried during that hour.
+
+Delivered slots and the item indices used are saved to `sent_state.json` beside `main.py`. This keeps a restart within the same hour from sending a duplicate. The file is replaced atomically, and a missing or unreadable file is treated as an empty day. Delete `sent_state.json` to start the day over.
+
 ## Offline validation
 
 Run `python -m unittest discover -s tests -v`. Tests stub the delivery SDK and do not send messages. The public-copy cleanup, sample content and offline tests were prepared with AI assistance.
