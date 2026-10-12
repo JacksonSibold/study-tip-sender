@@ -41,4 +41,19 @@ class ContentTests(unittest.TestCase):
  def test_missing_content_file_raises(self):
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',Path(d)/'absent.json'):
    with self.assertRaises(FileNotFoundError):sender.load_content()
+class SelectionTests(unittest.TestCase):
+ def test_pool_recycles_when_every_item_was_already_used(self):
+  state={'sent_indices':[0,1]}
+  with patch.object(sender.random,'choice',lambda seq:seq[0]):
+   idx,msg=sender.pick_message(['a','b'],state)
+  self.assertEqual((idx,msg),(0,'a'))
+  self.assertEqual(state['sent_indices'],[])
+ def test_message_at_exact_limit_is_not_truncated(self):
+  text='x'*320
+  _,msg=sender.pick_message([text],{})
+  self.assertEqual(msg,text)
+ def test_message_one_over_limit_is_truncated_with_ellipsis(self):
+  _,msg=sender.pick_message(['x'*321],{})
+  self.assertEqual(len(msg),320)
+  self.assertTrue(msg.endswith('...'))
 if __name__=='__main__':unittest.main()
