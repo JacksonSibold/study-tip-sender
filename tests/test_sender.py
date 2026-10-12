@@ -88,6 +88,17 @@ class StateTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'state.json'):
    sender.STATE_FILE.write_text('{"date":"2027-05-01","sent_indices":"oops","sent_slots":null}')
    self.assertEqual(sender.load_state(),{'date':'2027-05-01','sent_indices':[],'sent_slots':[]})
+ def test_interrupted_save_keeps_previous_state_intact(self):
+  import io,contextlib
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'state.json'):
+   old={'date':'2027-05-01','sent_indices':[0],'sent_slots':['2027-05-01 08']}
+   sender.save_state(old)
+   def partial_dump(obj,fp,**kwargs):
+    fp.write('{"date": "2027-05');raise OSError('disk full')
+   with patch.object(sender.json,'dump',partial_dump),contextlib.redirect_stdout(io.StringIO()):
+    sender.save_state({'date':'2027-05-01','sent_indices':[0,1],'sent_slots':[]})
+   self.assertEqual(json.loads(sender.STATE_FILE.read_text(encoding='utf-8')),old)
+   self.assertEqual(sorted(p.name for p in Path(d).iterdir()),['state.json'])
  def test_save_failure_logs_warning_instead_of_raising(self):
   import io,contextlib
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)),io.StringIO() as buf,contextlib.redirect_stdout(buf):

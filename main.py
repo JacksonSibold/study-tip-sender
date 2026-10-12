@@ -87,11 +87,19 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
+    # Write to a temp file and swap it in, so an interrupted write never
+    # leaves a truncated state file behind.
+    tmp_file = STATE_FILE.with_suffix(".tmp")
     try:
-        with STATE_FILE.open("w", encoding="utf-8") as f:
+        with tmp_file.open("w", encoding="utf-8") as f:
             json.dump(state, f)
+        os.replace(tmp_file, STATE_FILE)
     except Exception as e:
         log(f"WARN: failed to save state: {e}")
+        try:
+            tmp_file.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def reset_state_if_new_day(state: dict, today_str: str) -> dict:
