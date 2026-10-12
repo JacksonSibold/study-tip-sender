@@ -42,13 +42,26 @@ def log(msg: str) -> None:
 
 
 # ---------- Content ----------
+def _text_list(data: dict, key: str) -> list:
+    """Return data[key] as a list of non-empty strings (absent means empty)."""
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        raise ValueError(f"'{key}' must be a list")
+    for n, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"'{key}[{n}]' must be a non-empty string")
+    return value
+
+
 def load_content() -> list:
     with CONTENT_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("content file must contain a JSON object")
     items = []
-    for tip in data.get("tips", []):
+    for tip in _text_list(data, "tips"):
         items.append(f"Tip: {tip}")
-    for c in data.get("concepts", []):
+    for c in _text_list(data, "concepts"):
         items.append(f"Concept: {c}")
     for d in data.get("definitions", []):
         items.append(f"Def: {d['term']} - {d['definition']}")

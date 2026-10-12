@@ -38,6 +38,15 @@ class ContentTests(unittest.TestCase):
  def test_missing_categories_default_to_empty_list(self):
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',self._write_content(d,{'tips':['Only']})):
    self.assertEqual(sender.load_content(),['Tip: Only'])
+ def test_top_level_must_be_an_object(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',Path(d)/'c.json'):
+   sender.CONTENT_FILE.write_text('[]',encoding='utf-8')
+   with self.assertRaises(ValueError):sender.load_content()
+ def test_tips_and_concepts_must_be_lists_of_text(self):
+  bad=[{'tips':'one'},{'tips':[123]},{'concepts':['']},{'concepts':[None]}]
+  for data in bad:
+   with self.subTest(data=data),tempfile.TemporaryDirectory() as d,patch.object(sender,'CONTENT_FILE',self._write_content(d,data)):
+    with self.assertRaises(ValueError):sender.load_content()
  def test_missing_content_file_raises(self):
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',Path(d)/'absent.json'):
    with self.assertRaises(FileNotFoundError):sender.load_content()
