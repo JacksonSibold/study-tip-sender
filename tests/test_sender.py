@@ -56,4 +56,19 @@ class SelectionTests(unittest.TestCase):
   _,msg=sender.pick_message(['x'*321],{})
   self.assertEqual(len(msg),320)
   self.assertTrue(msg.endswith('...'))
+class DeliveryTests(unittest.TestCase):
+ def test_transient_failure_then_success_returns_true_after_one_backoff(self):
+  calls=[];waits=[]
+  def flaky(_):
+   calls.append(1)
+   if len(calls)==1:raise RuntimeError('temporary')
+   return {'id':'msg-1'}
+  with patch.object(sender,'RESEND_API_KEY','test-only'),patch.object(module.Emails,'send',flaky),patch.object(sender.time,'sleep',waits.append):
+   self.assertTrue(sender.send_sms('hello'))
+  self.assertEqual(len(calls),2);self.assertEqual(waits,[5])
+ def test_missing_api_key_fails_without_calling_sdk(self):
+  calls=[]
+  with patch.object(sender,'RESEND_API_KEY',''),patch.object(module.Emails,'send',lambda p:calls.append(p)):
+   self.assertFalse(sender.send_sms('hello'))
+  self.assertEqual(calls,[])
 if __name__=='__main__':unittest.main()
