@@ -168,4 +168,62 @@ class RunTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d,patch.object(sender,'PHONE_NUMBER','15555550100'),patch.object(sender,'RESEND_API_KEY','test-only'),patch.object(sender,'CONTENT_FILE',Path(d)/'missing.json'):
    with self.assertRaises(SystemExit) as cm:sender.run()
   self.assertNotEqual(cm.exception.code,0)
+class DryRunTests(unittest.TestCase):
+ def setUp(self):
+  import io,contextlib
+  self._dir=tempfile.TemporaryDirectory()
+  self.addCleanup(self._dir.cleanup)
+  self.state_file=Path(self._dir.name)/'sent_state.json'
+  content=Path(self._dir.name)/'content.json'
+  content.write_text(json.dumps({'tips':['Only tip']}),encoding='utf-8')
+  self.content_file=content
+  for name,value in (('STATE_FILE',self.state_file),('CONTENT_FILE',content),('PHONE_NUMBER','15555550100'),('RESEND_API_KEY',''),('TO_ADDRESS','15555550100@tmomail.net')):
+   patcher=patch.object(sender,name,value);patcher.start();self.addCleanup(patcher.stop)
+  for target in (patch.object(sender,'send_sms',side_effect=AssertionError('dry run must not send')),patch.object(module.Emails,'send',side_effect=AssertionError('dry run must not send'))):
+   target.start();self.addCleanup(target.stop)
+  self.out=io.StringIO()
+  self._redirect=contextlib.redirect_stdout(self.out);self._redirect.__enter__();self.addCleanup(self._redirect.__exit__,None,None,None)
+ def test_prints_the_next_message_and_recipient_without_sending(self):
+  sender.main(['--dry-run'])
+  output=self.out.getvalue()
+  self.assertIn('DRY RUN',output)
+  self.assertIn('Tip: Only tip',output)
+  self.assertIn('15555550100@tmomail.net',output)
+ def test_does_not_create_or_change_the_state_file(self):
+  sender.main(['--dry-run'])
+  self.assertFalse(self.state_file.exists())
+  stale={'date':'2000-01-01','sent_indices':[0],'sent_slots':['2000-01-01 08']}
+  self.state_file.write_text(json.dumps(stale))
+  before=self.state_file.read_text()
+  sender.main(['--dry-run'])
+  self.assertEqual(self.state_file.read_text(),before)
+ def test_does_not_mark_slots_or_indices_as_sent(self):
+  today=datetime.now(sender.MT).strftime('%Y-%m-%d')
+  state={'date':today,'sent_indices':[],'sent_slots':[]}
+  self.state_file.write_text(json.dumps(state))
+  sender.main(['--dry-run'])
+  self.assertEqual(json.loads(self.state_file.read_text()),state)
+ def test_does_not_require_an_api_key(self):
+  with patch.object(sender,'RESEND_API_KEY',''):
+   sender.main(['--dry-run'])
+  self.assertIn('DRY RUN',self.out.getvalue())
+ def test_malformed_phone_number_is_rejected(self):
+  with patch.object(sender,'PHONE_NUMBER','+15555550100'),self.assertRaises(SystemExit):
+   sender.main(['--dry-run'])
+ def test_missing_phone_number_is_rejected(self):
+  with patch.object(sender,'PHONE_NUMBER',''),self.assertRaises(SystemExit):
+   sender.main(['--dry-run'])
+ def test_unloadable_content_exits_with_nonzero_status(self):
+  with patch.object(sender,'CONTENT_FILE',Path(self._dir.name)/'missing.json'),self.assertRaises(SystemExit) as cm:
+   sender.main(['--dry-run'])
+  self.assertNotEqual(cm.exception.code,0)
+class ArgumentTests(unittest.TestCase):
+ def test_without_flag_main_starts_the_scheduler(self):
+  with patch.object(sender,'run') as run,patch.object(sender,'dry_run') as dry:
+   sender.main([])
+  run.assert_called_once_with();dry.assert_not_called()
+ def test_dry_run_flag_selects_dry_run_mode(self):
+  with patch.object(sender,'run') as run,patch.object(sender,'dry_run') as dry:
+   sender.main(['--dry-run'])
+  dry.assert_called_once_with();run.assert_not_called()
 if __name__=='__main__':unittest.main()

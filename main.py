@@ -3,13 +3,15 @@ Study Tip SMS Sender
 Sends periodic CS study tips via T-Mobile email-to-SMS gateway using Resend.
 """
 
+import argparse
+import copy
 import os
 import json
 import time
 import random
 import traceback
 from datetime import datetime, date
-from typing import Any
+from typing import Any, Optional
 from pathlib import Path
 
 try:
@@ -226,6 +228,52 @@ def dispatch_due_slot(state: dict[str, Any], content: list[str], now: datetime) 
     return True
 
 
+def _check_phone_number() -> None:
+    """Exit with a message unless PHONE_NUMBER is set and contains digits only."""
+    if not PHONE_NUMBER:
+        raise SystemExit("Set PHONE_NUMBER before running the sender.")
+    if not (PHONE_NUMBER.isascii() and PHONE_NUMBER.isdigit()):
+        raise SystemExit("PHONE_NUMBER must contain digits only, e.g. 15555550100 (no +, spaces or dashes).")
+
+
+def dry_run() -> None:
+    """Print the message the next send would deliver, without sending or saving state.
+
+    The loaded state is only read: a new day or a recycled pool is simulated in
+    memory, so the state file is never created or changed.
+    Exits with an error status when configuration or content is invalid.
+    """
+    _check_phone_number()
+    try:
+        content = load_content()
+    except Exception as e:
+        log(f"FATAL: cannot load content: {e}")
+        raise SystemExit(1)
+
+    today_str = datetime.now(MT).strftime("%Y-%m-%d")
+    state = load_state()
+    if state.get("date") != today_str:
+        state = _empty_state()
+    _, msg = pick_message(content, copy.deepcopy(state))
+    log("DRY RUN: nothing will be sent and state will not be saved.")
+    log(f"Would send to {TO_ADDRESS} (random item): {msg}")
+
+
+def main(argv: Optional[list[str]] = None) -> None:
+    """Parse command-line options and run the scheduler, or a dry run with --dry-run."""
+    parser = argparse.ArgumentParser(description="Study Tip SMS Sender")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the next message without sending it or saving state",
+    )
+    args = parser.parse_args(argv)
+    if args.dry_run:
+        dry_run()
+    else:
+        run()
+
+
 def run() -> None:
     """Run the scheduler until interrupted.
 
@@ -233,8 +281,7 @@ def run() -> None:
     """
     if not PHONE_NUMBER or not RESEND_API_KEY:
         raise SystemExit("Set PHONE_NUMBER and RESEND_API_KEY before running the sender.")
-    if not (PHONE_NUMBER.isascii() and PHONE_NUMBER.isdigit()):
-        raise SystemExit("PHONE_NUMBER must contain digits only, e.g. 15555550100 (no +, spaces or dashes).")
+    _check_phone_number()
     log("Study Tip Sender starting.")
     log(f"Recipient: {TO_ADDRESS}")
     log(f"Send hours (MT): {sorted(SEND_HOURS)}")
@@ -269,4 +316,4 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    run()
+    main()
