@@ -12,6 +12,18 @@ Use Python 3.9+, install `requirements.txt`, and set `RESEND_API_KEY`, `PHONE_NU
 
 The included content is a small generic sample, not exported class notes. Credentials, personal phone defaults and prior delivery state have been removed from this public copy. The code uses T-Mobile's email-to-SMS address format; current carrier availability and delivery behavior have not been verified, so this is a scheduling/delivery prototype rather than a guaranteed working SMS service.
 
+## Usage
+
+Install the dependencies with `python -m pip install -r requirements.txt`, which includes `tzdata` for Windows timezone support. Then set the environment variables and start the scheduler in the foreground:
+
+```
+export RESEND_API_KEY=re_your_key      # PowerShell: $env:RESEND_API_KEY = "re_your_key"
+export PHONE_NUMBER=15555550100
+python main.py
+```
+
+`PHONE_NUMBER` must contain digits only, including the country code, with no `+`, spaces or dashes. `FROM_ADDRESS` is optional and defaults to the Resend test sender. Press Ctrl+C to stop; the process logs the shutdown and exits. The sender refuses to start, with a message, if either required variable is missing or the phone number is malformed.
+
 ## Content file
 
 `content.json` in the project directory supplies the messages. Every section is optional, but the file must contain at least one entry:
