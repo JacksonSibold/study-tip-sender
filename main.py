@@ -9,6 +9,7 @@ import time
 import random
 import traceback
 from datetime import datetime, date
+from typing import Any
 from pathlib import Path
 
 try:
@@ -26,7 +27,7 @@ FROM_ADDRESS = os.getenv("FROM_ADDRESS", "Study Tips <onboarding@resend.dev>")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 
 MT = ZoneInfo("America/Denver")
-SEND_HOURS = {8, 10, 12, 14, 16, 18, 20, 22}
+SEND_HOURS: set[int] = {8, 10, 12, 14, 16, 18, 20, 22}
 
 CONTENT_FILE = Path(__file__).parent / "content.json"
 STATE_FILE = Path(__file__).parent / "sent_state.json"
@@ -42,7 +43,7 @@ def log(msg: str) -> None:
 
 
 # ---------- Content ----------
-def _text_list(data: dict, key: str) -> list:
+def _text_list(data: dict[str, Any], key: str) -> list[str]:
     """Return data[key] as a list of non-empty strings (absent means empty)."""
     value = data.get(key, [])
     if not isinstance(value, list):
@@ -53,7 +54,7 @@ def _text_list(data: dict, key: str) -> list:
     return value
 
 
-def _record_list(data: dict, key: str, fields: tuple) -> list:
+def _record_list(data: dict[str, Any], key: str, fields: tuple[str, ...]) -> list[dict[str, Any]]:
     """Return data[key] as a list of objects that each have the given non-empty string fields."""
     value = data.get(key, [])
     if not isinstance(value, list):
@@ -67,7 +68,7 @@ def _record_list(data: dict, key: str, fields: tuple) -> list:
     return value
 
 
-def load_content() -> list:
+def load_content() -> list[str]:
     with CONTENT_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):
@@ -87,11 +88,11 @@ def load_content() -> list:
 
 
 # ---------- State ----------
-def _empty_state() -> dict:
+def _empty_state() -> dict[str, Any]:
     return {"date": "", "sent_indices": [], "sent_slots": []}
 
 
-def _normalize_state(data: object) -> dict:
+def _normalize_state(data: object) -> dict[str, Any]:
     """Return a state dict with every expected key present and well-typed."""
     state = _empty_state()
     if not isinstance(data, dict):
@@ -104,7 +105,7 @@ def _normalize_state(data: object) -> dict:
     return state
 
 
-def load_state() -> dict:
+def load_state() -> dict[str, Any]:
     if not STATE_FILE.exists():
         return _empty_state()
     try:
@@ -115,7 +116,7 @@ def load_state() -> dict:
     return _normalize_state(data)
 
 
-def save_state(state: dict) -> None:
+def save_state(state: dict[str, Any]) -> None:
     # Write to a temp file and swap it in, so an interrupted write never
     # leaves a truncated state file behind.
     tmp_file = STATE_FILE.with_suffix(".tmp")
@@ -131,7 +132,7 @@ def save_state(state: dict) -> None:
             pass
 
 
-def reset_state_if_new_day(state: dict, today_str: str) -> dict:
+def reset_state_if_new_day(state: dict[str, Any], today_str: str) -> dict[str, Any]:
     if state.get("date") != today_str:
         state = {"date": today_str, "sent_indices": [], "sent_slots": []}
         save_state(state)
@@ -139,7 +140,7 @@ def reset_state_if_new_day(state: dict, today_str: str) -> dict:
 
 
 # ---------- Selection ----------
-def pick_message(content: list, state: dict) -> tuple:
+def pick_message(content: list[str], state: dict[str, Any]) -> tuple[int, str]:
     used = set(state.get("sent_indices", []))
     available = [i for i in range(len(content)) if i not in used]
     if not available:
@@ -183,7 +184,7 @@ def send_sms(message: str) -> bool:
 
 
 # ---------- Scheduler ----------
-def dispatch_due_slot(state: dict, content: list, now: datetime) -> bool:
+def dispatch_due_slot(state: dict[str, Any], content: list[str], now: datetime) -> bool:
     """Send one tip if `now` is an unsent top-of-hour send slot.
 
     Returns True only when a message was delivered. A delivered slot is
