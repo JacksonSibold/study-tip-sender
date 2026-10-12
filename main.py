@@ -53,6 +53,20 @@ def _text_list(data: dict, key: str) -> list:
     return value
 
 
+def _record_list(data: dict, key: str, fields: tuple) -> list:
+    """Return data[key] as a list of objects that each have the given non-empty string fields."""
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        raise ValueError(f"'{key}' must be a list")
+    for n, record in enumerate(value):
+        if not isinstance(record, dict):
+            raise ValueError(f"'{key}[{n}]' must be an object")
+        for field in fields:
+            if not isinstance(record.get(field), str) or not record[field].strip():
+                raise ValueError(f"'{key}[{n}].{field}' must be a non-empty string")
+    return value
+
+
 def load_content() -> list:
     with CONTENT_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -63,9 +77,9 @@ def load_content() -> list:
         items.append(f"Tip: {tip}")
     for c in _text_list(data, "concepts"):
         items.append(f"Concept: {c}")
-    for d in data.get("definitions", []):
+    for d in _record_list(data, "definitions", ("term", "definition")):
         items.append(f"Def: {d['term']} - {d['definition']}")
-    for q in data.get("questions", []):
+    for q in _record_list(data, "questions", ("q", "a")):
         items.append(f"Q: {q['q']} A: {q['a']}")
     return items
 

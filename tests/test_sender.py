@@ -47,6 +47,11 @@ class ContentTests(unittest.TestCase):
   for data in bad:
    with self.subTest(data=data),tempfile.TemporaryDirectory() as d,patch.object(sender,'CONTENT_FILE',self._write_content(d,data)):
     with self.assertRaises(ValueError):sender.load_content()
+ def test_definitions_and_questions_require_their_fields(self):
+  bad=[{'definitions':[{'term':'T'}]},{'definitions':['T - D']},{'questions':[{'q':'Q?'}]},{'questions':[{'q':'Q?','a':''}]}]
+  for data in bad:
+   with self.subTest(data=data),tempfile.TemporaryDirectory() as d,patch.object(sender,'CONTENT_FILE',self._write_content(d,data)):
+    with self.assertRaises(ValueError):sender.load_content()
  def test_missing_content_file_raises(self):
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',Path(d)/'absent.json'):
    with self.assertRaises(FileNotFoundError):sender.load_content()
