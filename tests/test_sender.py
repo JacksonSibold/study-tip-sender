@@ -26,4 +26,19 @@ class SenderTests(unittest.TestCase):
  def test_missing_configuration_stops_before_delivery(self):
   with patch.object(sender,'PHONE_NUMBER',''),patch.object(sender,'RESEND_API_KEY',''):
    with self.assertRaises(SystemExit):sender.run()
+class ContentTests(unittest.TestCase):
+ def _write_content(self,d,data):
+  path=Path(d)/'content.json'
+  path.write_text(json.dumps(data),encoding='utf-8')
+  return path
+ def test_all_content_categories_are_formatted(self):
+  data={'tips':['Rest'],'concepts':['Cache'],'definitions':[{'term':'T','definition':'D'}],'questions':[{'q':'Why?','a':'Because'}]}
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',self._write_content(d,data)):
+   self.assertEqual(sender.load_content(),['Tip: Rest','Concept: Cache','Def: T - D','Q: Why? A: Because'])
+ def test_missing_categories_default_to_empty_list(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',self._write_content(d,{'tips':['Only']})):
+   self.assertEqual(sender.load_content(),['Tip: Only'])
+ def test_missing_content_file_raises(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',Path(d)/'absent.json'):
+   with self.assertRaises(FileNotFoundError):sender.load_content()
 if __name__=='__main__':unittest.main()
