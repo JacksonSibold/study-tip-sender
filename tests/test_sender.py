@@ -1,4 +1,5 @@
 import importlib.util,json,sys,tempfile,types,unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 module=types.ModuleType('resend')
@@ -127,6 +128,33 @@ class StateTests(unittest.TestCase):
    state={'date':'2027-05-01','sent_indices':[2],'sent_slots':['2027-05-01 08']}
    self.assertIs(sender.reset_state_if_new_day(state,'2027-05-01'),state)
    self.assertFalse(sender.STATE_FILE.exists())
+class SlotTests(unittest.TestCase):
+ def setUp(self):
+  self._dir=tempfile.TemporaryDirectory()
+  self.addCleanup(self._dir.cleanup)
+  patcher=patch.object(sender,'STATE_FILE',Path(self._dir.name)/'state.json')
+  patcher.start();self.addCleanup(patcher.stop)
+ def _state(self):
+  return {'date':'2026-10-12','sent_indices':[],'sent_slots':[]}
+ def test_sends_once_at_top_of_a_send_hour_and_records_the_slot(self):
+  state=self._state();now=datetime(2026,10,12,10,0,tzinfo=sender.MT)
+  with patch.object(sender,'send_sms',return_value=True) as send:
+   self.assertTrue(sender.dispatch_due_slot(state,['a','b'],now))
+   self.assertFalse(sender.dispatch_due_slot(state,['a','b'],now))
+  self.assertEqual(send.call_count,1)
+  self.assertEqual(state['sent_slots'],['2026-10-12 10'])
+  self.assertEqual(len(state['sent_indices']),1)
+ def test_no_send_outside_send_hours_or_off_the_minute(self):
+  for now in (datetime(2026,10,12,9,0,tzinfo=sender.MT),datetime(2026,10,12,10,1,tzinfo=sender.MT)):
+   with self.subTest(now=now),patch.object(sender,'send_sms',return_value=True) as send:
+    self.assertFalse(sender.dispatch_due_slot(self._state(),['a'],now))
+    send.assert_not_called()
+ def test_failed_send_does_not_record_the_slot(self):
+  state=self._state();now=datetime(2026,10,12,12,0,tzinfo=sender.MT)
+  with patch.object(sender,'send_sms',return_value=False):
+   self.assertFalse(sender.dispatch_due_slot(state,['a'],now))
+  self.assertEqual(state['sent_slots'],[])
+  self.assertEqual(state['sent_indices'],[])
 class RunTests(unittest.TestCase):
  def test_phone_number_must_be_digits_only(self):
   for phone in ('+15555550100','555-0100','1555 0100'):

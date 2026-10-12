@@ -183,6 +183,31 @@ def send_sms(message: str) -> bool:
 
 
 # ---------- Scheduler ----------
+def dispatch_due_slot(state: dict, content: list, now: datetime) -> bool:
+    """Send one tip if `now` is an unsent top-of-hour send slot.
+
+    Returns True only when a message was delivered. A delivered slot is
+    recorded in `state` and persisted; a failed one stays unmarked.
+    """
+    today_str = now.strftime("%Y-%m-%d")
+    slot_key = f"{today_str} {now.hour:02d}"
+    if not (
+        now.hour in SEND_HOURS
+        and now.minute == 0
+        and slot_key not in state.get("sent_slots", [])
+    ):
+        return False
+    log(f"Trigger slot {slot_key}")
+    idx, msg = pick_message(content, state)
+    if not send_sms(msg):
+        log("Send unsuccessful; will not mark slot, retry next minute window.")
+        return False
+    state["sent_indices"].append(idx)
+    state["sent_slots"].append(slot_key)
+    save_state(state)
+    return True
+
+
 def run() -> None:
     if not PHONE_NUMBER or not RESEND_API_KEY:
         raise SystemExit("Set PHONE_NUMBER and RESEND_API_KEY before running the sender.")
@@ -207,21 +232,7 @@ def run() -> None:
             today_str = now.strftime("%Y-%m-%d")
             state = reset_state_if_new_day(state, today_str)
 
-            slot_key = f"{today_str} {now.hour:02d}"
-            if (
-                now.hour in SEND_HOURS
-                and now.minute == 0
-                and slot_key not in state.get("sent_slots", [])
-            ):
-                log(f"Trigger slot {slot_key}")
-                idx, msg = pick_message(content, state)
-                ok = send_sms(msg)
-                if ok:
-                    state["sent_indices"].append(idx)
-                    state["sent_slots"].append(slot_key)
-                    save_state(state)
-                else:
-                    log("Send unsuccessful; will not mark slot, retry next minute window.")
+            dispatch_due_slot(state, content, now)
 
             # Sleep until next minute boundary
             sleep_s = 60 - datetime.now(MT).second
