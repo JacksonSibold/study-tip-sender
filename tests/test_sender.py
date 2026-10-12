@@ -226,4 +226,58 @@ class ArgumentTests(unittest.TestCase):
   with patch.object(sender,'run') as run,patch.object(sender,'dry_run') as dry:
    sender.main(['--dry-run'])
   dry.assert_called_once_with();run.assert_not_called()
+class ListContentTests(unittest.TestCase):
+ def setUp(self):
+  import io,contextlib
+  self._dir=tempfile.TemporaryDirectory()
+  self.addCleanup(self._dir.cleanup)
+  self.state_file=Path(self._dir.name)/'sent_state.json'
+  self.content_file=Path(self._dir.name)/'content.json'
+  for name,value in (('STATE_FILE',self.state_file),('CONTENT_FILE',self.content_file),('PHONE_NUMBER',''),('RESEND_API_KEY','')):
+   patcher=patch.object(sender,name,value);patcher.start();self.addCleanup(patcher.stop)
+  self.out=io.StringIO()
+  redirect=contextlib.redirect_stdout(self.out);redirect.__enter__();self.addCleanup(redirect.__exit__,None,None,None)
+ def _write(self,data):
+  self.content_file.write_text(json.dumps(data),encoding='utf-8')
+ def test_prints_the_count_for_each_section_and_the_total(self):
+  self._write({'tips':['a','b'],'concepts':['c'],'definitions':[{'term':'T','definition':'D'}],'questions':[{'q':'Q?','a':'A'}]})
+  sender.main(['--list-content'])
+  lines=self.out.getvalue().splitlines()
+  self.assertIn('Tips         2',lines)
+  self.assertIn('Concepts     1',lines)
+  self.assertIn('Definitions  1',lines)
+  self.assertIn('Questions    1',lines)
+  self.assertIn('Total        5',lines)
+ def test_missing_sections_are_counted_as_zero(self):
+  self._write({'tips':['Only']})
+  sender.main(['--list-content'])
+  output=self.out.getvalue()
+  self.assertIn('Concepts     0',output)
+  self.assertIn('Questions    0',output)
+  self.assertIn('Total        1',output)
+ def test_invalid_or_empty_content_exits_with_nonzero_status(self):
+  for data in ({},{'tips':'not a list'},{'definitions':[{'term':'T'}]}):
+   with self.subTest(data=data):
+    self._write(data)
+    with self.assertRaises(SystemExit) as cm:
+     sender.main(['--list-content'])
+    self.assertNotEqual(cm.exception.code,0)
+ def test_missing_content_file_exits_with_nonzero_status(self):
+  with self.assertRaises(SystemExit) as cm:
+   sender.main(['--list-content'])
+  self.assertNotEqual(cm.exception.code,0)
+ def test_does_not_need_phone_number_or_api_key_and_leaves_state_alone(self):
+  self._write({'tips':['a']})
+  sender.main(['--list-content'])
+  self.assertIn('Total        1',self.out.getvalue())
+  self.assertFalse(self.state_file.exists())
+ def test_cannot_be_combined_with_dry_run(self):
+  import io,contextlib
+  with self.assertRaises(SystemExit) as cm,contextlib.redirect_stderr(io.StringIO()):
+   sender.main(['--list-content','--dry-run'])
+  self.assertEqual(cm.exception.code,2)
+ def test_flag_selects_list_mode(self):
+  with patch.object(sender,'list_content') as listing,patch.object(sender,'run') as run:
+   sender.main(['--list-content'])
+  listing.assert_called_once_with();run.assert_not_called()
 if __name__=='__main__':unittest.main()

@@ -71,8 +71,8 @@ def _record_list(data: dict[str, Any], key: str, fields: tuple[str, ...]) -> lis
     return value
 
 
-def load_content() -> list[str]:
-    """Read content.json and return formatted study items.
+def load_content_sections() -> dict[str, list[Any]]:
+    """Read and validate content.json, returning its entries grouped by section.
 
     Raises FileNotFoundError or json.JSONDecodeError if the file cannot be read,
     and ValueError if its structure is invalid or it contains no entries.
@@ -81,17 +81,27 @@ def load_content() -> list[str]:
         data = json.load(f)
     if not isinstance(data, dict):
         raise ValueError("content file must contain a JSON object")
-    items = []
-    for tip in _text_list(data, "tips"):
-        items.append(f"Tip: {tip}")
-    for c in _text_list(data, "concepts"):
-        items.append(f"Concept: {c}")
-    for d in _record_list(data, "definitions", ("term", "definition")):
-        items.append(f"Def: {d['term']} - {d['definition']}")
-    for q in _record_list(data, "questions", ("q", "a")):
-        items.append(f"Q: {q['q']} A: {q['a']}")
-    if not items:
+    sections: dict[str, list[Any]] = {
+        "tips": _text_list(data, "tips"),
+        "concepts": _text_list(data, "concepts"),
+        "definitions": _record_list(data, "definitions", ("term", "definition")),
+        "questions": _record_list(data, "questions", ("q", "a")),
+    }
+    if not any(sections.values()):
         raise ValueError("content file has no tips, concepts, definitions or questions")
+    return sections
+
+
+def load_content() -> list[str]:
+    """Read content.json and return formatted study items.
+
+    Raises the same errors as load_content_sections.
+    """
+    sections = load_content_sections()
+    items = [f"Tip: {tip}" for tip in sections["tips"]]
+    items += [f"Concept: {c}" for c in sections["concepts"]]
+    items += [f"Def: {d['term']} - {d['definition']}" for d in sections["definitions"]]
+    items += [f"Q: {q['q']} A: {q['a']}" for q in sections["questions"]]
     return items
 
 
@@ -236,6 +246,21 @@ def _check_phone_number() -> None:
         raise SystemExit("PHONE_NUMBER must contain digits only, e.g. 15555550100 (no +, spaces or dashes).")
 
 
+def list_content() -> None:
+    """Print how many entries each section of content.json holds.
+
+    Exits with an error status when the file cannot be loaded or is invalid.
+    """
+    try:
+        sections = load_content_sections()
+    except Exception as e:
+        raise SystemExit(f"FATAL: cannot load content: {e}")
+    print(f"Content file: {CONTENT_FILE}")
+    for name in ("tips", "concepts", "definitions", "questions"):
+        print(f"{name.capitalize():<12} {len(sections[name])}")
+    print(f"{'Total':<12} {sum(len(entries) for entries in sections.values())}")
+
+
 def dry_run() -> None:
     """Print the message the next send would deliver, without sending or saving state.
 
@@ -262,13 +287,21 @@ def dry_run() -> None:
 def main(argv: Optional[list[str]] = None) -> None:
     """Parse command-line options and run the scheduler, or a dry run with --dry-run."""
     parser = argparse.ArgumentParser(description="Study Tip SMS Sender")
-    parser.add_argument(
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument(
         "--dry-run",
         action="store_true",
         help="print the next message without sending it or saving state",
     )
+    modes.add_argument(
+        "--list-content",
+        action="store_true",
+        help="summarize the entries in content.json and exit",
+    )
     args = parser.parse_args(argv)
-    if args.dry_run:
+    if args.list_content:
+        list_content()
+    elif args.dry_run:
         dry_run()
     else:
         run()
