@@ -80,6 +80,14 @@ class StateTests(unittest.TestCase):
    for raw in ('[]','"text"','null'):
     sender.STATE_FILE.write_text(raw)
     self.assertEqual(sender.load_state(),{'date':'','sent_indices':[],'sent_slots':[]},raw)
+ def test_partial_state_is_filled_with_defaults(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'state.json'):
+   sender.STATE_FILE.write_text('{"date": "2027-05-01"}')
+   self.assertEqual(sender.load_state(),{'date':'2027-05-01','sent_indices':[],'sent_slots':[]})
+ def test_wrong_typed_lists_are_replaced_with_empty_lists(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'state.json'):
+   sender.STATE_FILE.write_text('{"date":"2027-05-01","sent_indices":"oops","sent_slots":null}')
+   self.assertEqual(sender.load_state(),{'date':'2027-05-01','sent_indices':[],'sent_slots':[]})
  def test_save_failure_logs_warning_instead_of_raising(self):
   import io,contextlib
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)),io.StringIO() as buf,contextlib.redirect_stdout(buf):

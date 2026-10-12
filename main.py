@@ -58,17 +58,32 @@ def load_content() -> list:
 
 
 # ---------- State ----------
+def _empty_state() -> dict:
+    return {"date": "", "sent_indices": [], "sent_slots": []}
+
+
+def _normalize_state(data: object) -> dict:
+    """Return a state dict with every expected key present and well-typed."""
+    state = _empty_state()
+    if not isinstance(data, dict):
+        return state
+    if isinstance(data.get("date"), str):
+        state["date"] = data["date"]
+    for key in ("sent_indices", "sent_slots"):
+        if isinstance(data.get(key), list):
+            state[key] = data[key]
+    return state
+
+
 def load_state() -> dict:
     if not STATE_FILE.exists():
-        return {"date": "", "sent_indices": [], "sent_slots": []}
+        return _empty_state()
     try:
         with STATE_FILE.open("r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
-        return {"date": "", "sent_indices": [], "sent_slots": []}
-    if not isinstance(data, dict):
-        return {"date": "", "sent_indices": [], "sent_slots": []}
-    return data
+        return _empty_state()
+    return _normalize_state(data)
 
 
 def save_state(state: dict) -> None:
