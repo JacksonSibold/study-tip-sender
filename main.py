@@ -38,6 +38,7 @@ BACKOFF_BASE_SECONDS = 5
 
 # ---------- Logging ----------
 def log(msg: str) -> None:
+    """Print a timestamped line in Mountain Time."""
     ts = datetime.now(MT).strftime("%Y-%m-%d %H:%M:%S %Z")
     print(f"[{ts}] {msg}", flush=True)
 
@@ -69,6 +70,11 @@ def _record_list(data: dict[str, Any], key: str, fields: tuple[str, ...]) -> lis
 
 
 def load_content() -> list[str]:
+    """Read content.json and return formatted study items.
+
+    Raises FileNotFoundError or json.JSONDecodeError if the file cannot be read,
+    and ValueError if its structure is invalid or it contains no entries.
+    """
     with CONTENT_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):
@@ -106,6 +112,7 @@ def _normalize_state(data: object) -> dict[str, Any]:
 
 
 def load_state() -> dict[str, Any]:
+    """Load persisted delivery state, or the empty state if it is missing or unreadable."""
     if not STATE_FILE.exists():
         return _empty_state()
     try:
@@ -117,6 +124,7 @@ def load_state() -> dict[str, Any]:
 
 
 def save_state(state: dict[str, Any]) -> None:
+    """Persist delivery state. A failed write is logged, not raised."""
     # Write to a temp file and swap it in, so an interrupted write never
     # leaves a truncated state file behind.
     tmp_file = STATE_FILE.with_suffix(".tmp")
@@ -133,6 +141,7 @@ def save_state(state: dict[str, Any]) -> None:
 
 
 def reset_state_if_new_day(state: dict[str, Any], today_str: str) -> dict[str, Any]:
+    """Start a fresh state and persist it when the date has changed."""
     if state.get("date") != today_str:
         state = {"date": today_str, "sent_indices": [], "sent_slots": []}
         save_state(state)
@@ -141,6 +150,10 @@ def reset_state_if_new_day(state: dict[str, Any], today_str: str) -> dict[str, A
 
 # ---------- Selection ----------
 def pick_message(content: list[str], state: dict[str, Any]) -> tuple[int, str]:
+    """Pick a random item not yet sent today, truncated to the SMS length limit.
+
+    If every item was already sent, the pool is reset first.
+    """
     used = set(state.get("sent_indices", []))
     available = [i for i in range(len(content)) if i not in used]
     if not available:
@@ -157,6 +170,10 @@ def pick_message(content: list[str], state: dict[str, Any]) -> tuple[int, str]:
 
 # ---------- Sending ----------
 def send_sms(message: str) -> bool:
+    """Send a message via Resend with bounded retries and exponential backoff.
+
+    Returns True on success, False if the API key is missing or all attempts fail.
+    """
     if not RESEND_API_KEY:
         log("ERROR: RESEND_API_KEY not set.")
         return False
@@ -210,6 +227,10 @@ def dispatch_due_slot(state: dict[str, Any], content: list[str], now: datetime) 
 
 
 def run() -> None:
+    """Run the scheduler until interrupted.
+
+    Exits with an error status when configuration or content is invalid.
+    """
     if not PHONE_NUMBER or not RESEND_API_KEY:
         raise SystemExit("Set PHONE_NUMBER and RESEND_API_KEY before running the sender.")
     if not (PHONE_NUMBER.isascii() and PHONE_NUMBER.isdigit()):
