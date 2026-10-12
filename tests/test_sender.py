@@ -280,4 +280,49 @@ class ListContentTests(unittest.TestCase):
   with patch.object(sender,'list_content') as listing,patch.object(sender,'run') as run:
    sender.main(['--list-content'])
   listing.assert_called_once_with();run.assert_not_called()
+class LoggingTests(unittest.TestCase):
+ def setUp(self):
+  import io,contextlib
+  previous=sender.logger.level
+  self.addCleanup(sender.logger.setLevel,previous)
+  self.out=io.StringIO()
+  redirect=contextlib.redirect_stdout(self.out);redirect.__enter__();self.addCleanup(redirect.__exit__,None,None,None)
+ def test_log_level_names_are_case_insensitive(self):
+  import logging
+  self.assertEqual(sender.parse_log_level(' debug '),logging.DEBUG)
+  self.assertEqual(sender.parse_log_level('Warning'),logging.WARNING)
+ def test_unknown_log_level_exits_with_a_message(self):
+  with self.assertRaises(SystemExit) as cm:
+   sender.configure_logging('loud')
+  self.assertIn('LOG_LEVEL',str(cm.exception.code))
+ def test_info_level_shows_info_and_hides_debug(self):
+  import logging
+  sender.configure_logging('INFO')
+  sender.log('visible')
+  sender.log('hidden',logging.DEBUG)
+  self.assertIn('visible',self.out.getvalue())
+  self.assertNotIn('hidden',self.out.getvalue())
+ def test_debug_level_shows_debug_messages(self):
+  sender.configure_logging('DEBUG')
+  state={'date':'2026-10-12','sent_indices':[],'sent_slots':[]}
+  with patch.object(sender,'send_sms',return_value=True):
+   sender.dispatch_due_slot(state,['a'],datetime(2026,10,12,9,0,tzinfo=sender.MT))
+  self.assertIn('No send due at 09:00',self.out.getvalue())
+ def test_warning_level_hides_info_and_shows_warnings(self):
+  import logging
+  sender.configure_logging('WARNING')
+  sender.log('routine')
+  sender.log('careful',logging.WARNING)
+  self.assertNotIn('routine',self.out.getvalue())
+  self.assertIn('careful',self.out.getvalue())
+ def test_failed_state_save_is_a_warning_shown_at_warning_level(self):
+  sender.configure_logging('WARNING')
+  with tempfile.TemporaryDirectory() as d,patch.object(sender,'STATE_FILE',Path(d)):
+   sender.save_state({'date':'x','sent_indices':[],'sent_slots':[]})
+  self.assertIn('WARN: failed to save state',self.out.getvalue())
+ def test_lines_keep_the_mountain_time_prefix(self):
+  import re
+  sender.configure_logging('INFO')
+  sender.log('hello')
+  self.assertRegex(self.out.getvalue(),r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} M[DS]T\] hello\n$')
 if __name__=='__main__':unittest.main()

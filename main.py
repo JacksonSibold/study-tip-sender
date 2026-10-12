@@ -5,8 +5,10 @@ Sends periodic CS study tips via T-Mobile email-to-SMS gateway using Resend.
 
 import argparse
 import copy
+import logging
 import os
 import json
+import sys
 import time
 import random
 import traceback
@@ -27,6 +29,7 @@ PHONE_NUMBER = os.getenv("PHONE_NUMBER", "")
 TO_ADDRESS = f"{PHONE_NUMBER}@tmomail.net"
 FROM_ADDRESS = os.getenv("FROM_ADDRESS", "Study Tips <onboarding@resend.dev>")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+LOG_LEVEL = os.getenv("LOG_LEVEL") or "INFO"
 
 MT = ZoneInfo("America/Denver")
 SEND_HOURS: set[int] = {8, 10, 12, 14, 16, 18, 20, 22}
@@ -39,10 +42,60 @@ BACKOFF_BASE_SECONDS = 5
 
 
 # ---------- Logging ----------
-def log(msg: str) -> None:
-    """Print a timestamped line in Mountain Time."""
-    ts = datetime.now(MT).strftime("%Y-%m-%d %H:%M:%S %Z")
-    print(f"[{ts}] {msg}", flush=True)
+_LEVEL_NAMES = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+logger = logging.getLogger("study_tips")
+logger.propagate = False
+
+
+class _StdoutHandler(logging.StreamHandler):
+    """Write to the current sys.stdout, so redirecting stdout also captures log lines."""
+
+    @property
+    def stream(self):  # type: ignore[override]
+        return sys.stdout
+
+    @stream.setter
+    def stream(self, _value) -> None:
+        pass
+
+
+class _MountainTimeFormatter(logging.Formatter):
+    """Timestamp each record in Mountain Time, e.g. 2026-10-12 10:00:00 MDT."""
+
+    def formatTime(self, record, datefmt=None):  # type: ignore[override]
+        return datetime.fromtimestamp(record.created, MT).strftime("%Y-%m-%d %H:%M:%S %Z")
+
+
+_handler = _StdoutHandler()
+_handler.setFormatter(_MountainTimeFormatter("[%(asctime)s] %(message)s"))
+logger.addHandler(_handler)
+
+
+def parse_log_level(name: str) -> int:
+    """Return the logging level named by a LOG_LEVEL value, ignoring case.
+
+    Raises ValueError for an unknown name.
+    """
+    upper = name.strip().upper()
+    if upper not in _LEVEL_NAMES:
+        raise ValueError(f"LOG_LEVEL must be one of {', '.join(_LEVEL_NAMES)} (got {name!r}).")
+    return getattr(logging, upper)
+
+
+def configure_logging(name: str = LOG_LEVEL) -> None:
+    """Apply a LOG_LEVEL name to the module logger. Exits with a message if it is unknown."""
+    try:
+        logger.setLevel(parse_log_level(name))
+    except ValueError as e:
+        raise SystemExit(str(e))
+
+
+def log(msg: str, level: int = logging.INFO) -> None:
+    """Log a message at `level`. Lines are timestamped in Mountain Time."""
+    logger.log(level, msg)
+
+
+configure_logging()
 
 
 # ---------- Content ----------
@@ -145,7 +198,7 @@ def save_state(state: dict[str, Any]) -> None:
             json.dump(state, f)
         os.replace(tmp_file, STATE_FILE)
     except Exception as e:
-        log(f"WARN: failed to save state: {e}")
+        log(f"WARN: failed to save state: {e}", logging.WARNING)
         try:
             tmp_file.unlink(missing_ok=True)
         except OSError:
@@ -187,7 +240,7 @@ def send_sms(message: str) -> bool:
     Returns True on success, False if the API key is missing or all attempts fail.
     """
     if not RESEND_API_KEY:
-        log("ERROR: RESEND_API_KEY not set.")
+        log("ERROR: RESEND_API_KEY not set.", logging.ERROR)
         return False
     resend.api_key = RESEND_API_KEY
 
@@ -204,11 +257,11 @@ def send_sms(message: str) -> bool:
             return True
         except Exception as e:
             wait = BACKOFF_BASE_SECONDS * (2 ** (attempt - 1))
-            log(f"Send failed (attempt {attempt}/{MAX_RETRIES}): {e}")
+            log(f"Send failed (attempt {attempt}/{MAX_RETRIES}): {e}", logging.WARNING)
             if attempt < MAX_RETRIES:
                 log(f"Retrying in {wait}s...")
                 time.sleep(wait)
-    log("ERROR: All retries exhausted.")
+    log("ERROR: All retries exhausted.", logging.ERROR)
     return False
 
 
@@ -226,6 +279,7 @@ def dispatch_due_slot(state: dict[str, Any], content: list[str], now: datetime) 
         and now.minute == 0
         and slot_key not in state.get("sent_slots", [])
     ):
+        log(f"No send due at {now:%H:%M}.", logging.DEBUG)
         return False
     log(f"Trigger slot {slot_key}")
     idx, msg = pick_message(content, state)
@@ -272,7 +326,7 @@ def dry_run() -> None:
     try:
         content = load_content()
     except Exception as e:
-        log(f"FATAL: cannot load content: {e}")
+        log(f"FATAL: cannot load content: {e}", logging.ERROR)
         raise SystemExit(1)
 
     today_str = datetime.now(MT).strftime("%Y-%m-%d")
@@ -323,7 +377,7 @@ def run() -> None:
         content = load_content()
         log(f"Loaded {len(content)} content items.")
     except Exception as e:
-        log(f"FATAL: cannot load content: {e}")
+        log(f"FATAL: cannot load content: {e}", logging.ERROR)
         raise SystemExit(1)
 
     state = load_state()
@@ -343,7 +397,7 @@ def run() -> None:
             log("Shutdown requested. Exiting.")
             return
         except Exception as e:
-            log(f"Loop error: {e}")
+            log(f"Loop error: {e}", logging.ERROR)
             traceback.print_exc()
             time.sleep(30)
 
