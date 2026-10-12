@@ -71,4 +71,18 @@ class DeliveryTests(unittest.TestCase):
   with patch.object(sender,'RESEND_API_KEY',''),patch.object(module.Emails,'send',lambda p:calls.append(p)):
    self.assertFalse(sender.send_sms('hello'))
   self.assertEqual(calls,[])
+class StateTests(unittest.TestCase):
+ def test_missing_state_file_returns_empty_defaults(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'none.json'):
+   self.assertEqual(sender.load_state(),{'date':'','sent_indices':[],'sent_slots':[]})
+ def test_save_failure_logs_warning_instead_of_raising(self):
+  import io,contextlib
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)),io.StringIO() as buf,contextlib.redirect_stdout(buf):
+   sender.save_state({'date':'x','sent_indices':[],'sent_slots':[]})
+   self.assertIn('WARN: failed to save state',buf.getvalue())
+ def test_same_day_state_is_returned_unchanged_without_writing(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'state.json'):
+   state={'date':'2027-05-01','sent_indices':[2],'sent_slots':['2027-05-01 08']}
+   self.assertIs(sender.reset_state_if_new_day(state,'2027-05-01'),state)
+   self.assertFalse(sender.STATE_FILE.exists())
 if __name__=='__main__':unittest.main()
