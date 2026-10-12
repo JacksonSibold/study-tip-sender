@@ -24,6 +24,22 @@ python main.py
 
 `PHONE_NUMBER` must contain digits only, including the country code, with no `+`, spaces or dashes. `FROM_ADDRESS` is optional and defaults to the Resend test sender. Press Ctrl+C to stop; the process logs the shutdown and exits. The sender refuses to start, with a message, if either required variable is missing or the phone number is malformed.
 
+### Dry run
+
+`python main.py --dry-run` picks the message the next send would deliver and prints it with the recipient address, then exits. Nothing is sent, and `sent_state.json` is neither created nor changed, so it is safe to run while the scheduler is active. A dry run needs `PHONE_NUMBER` but not `RESEND_API_KEY`.
+
+### Content summary
+
+`python main.py --list-content` prints the source file path and the number of entries in each section of `content.json`, followed by the total number of items. It does not need `PHONE_NUMBER` or `RESEND_API_KEY`, does not touch the state file, and exits with status 1 if the file is missing or invalid. `--dry-run` and `--list-content` cannot be combined.
+
+### Log level
+
+Log lines are written to stdout with a Mountain Time timestamp. Set `LOG_LEVEL` to `DEBUG`, `INFO` (the default), `WARNING`, `ERROR` or `CRITICAL` to choose how much is shown; the name is case-insensitive. At `DEBUG`, each minute that is not a send slot is logged as `No send due at HH:MM`. Failed send attempts are warnings, and an unknown value makes the program exit with a message:
+
+```
+export LOG_LEVEL=WARNING      # PowerShell: $env:LOG_LEVEL = "WARNING"
+```
+
 ## Content file
 
 `content.json` in the project directory supplies the messages. Every section is optional, but the file must contain at least one entry:
@@ -52,3 +68,5 @@ Delivered slots and the item indices used are saved to `sent_state.json` beside 
 ## Offline validation
 
 Run `python -m unittest discover -s tests -v`. Tests stub the delivery SDK and do not send messages. The public-copy cleanup, sample content and offline tests were prepared with AI assistance.
+
+The GitHub Actions workflow in `.github/workflows/test.yml` runs the same command on every push and pull request, on Python 3.9 and 3.13, after installing `requirements.txt`.
