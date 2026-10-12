@@ -150,9 +150,12 @@ class SlotTests(unittest.TestCase):
     self.assertFalse(sender.dispatch_due_slot(self._state(),['a'],now))
     send.assert_not_called()
  def test_failed_send_does_not_record_the_slot(self):
+  import io,contextlib
   state=self._state();now=datetime(2026,10,12,12,0,tzinfo=sender.MT)
-  with patch.object(sender,'send_sms',return_value=False):
+  out=io.StringIO()
+  with patch.object(sender,'send_sms',return_value=False),contextlib.redirect_stdout(out):
    self.assertFalse(sender.dispatch_due_slot(state,['a'],now))
+  self.assertIn('will not be retried this hour',out.getvalue())
   self.assertEqual(state['sent_slots'],[])
   self.assertEqual(state['sent_indices'],[])
 class RunTests(unittest.TestCase):

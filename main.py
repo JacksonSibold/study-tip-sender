@@ -200,7 +200,7 @@ def dispatch_due_slot(state: dict, content: list, now: datetime) -> bool:
     log(f"Trigger slot {slot_key}")
     idx, msg = pick_message(content, state)
     if not send_sms(msg):
-        log("Send unsuccessful; will not mark slot, retry next minute window.")
+        log("Send unsuccessful; slot not marked and will not be retried this hour.")
         return False
     state["sent_indices"].append(idx)
     state["sent_slots"].append(slot_key)
