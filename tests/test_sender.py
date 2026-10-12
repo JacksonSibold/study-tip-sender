@@ -75,6 +75,11 @@ class StateTests(unittest.TestCase):
  def test_missing_state_file_returns_empty_defaults(self):
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'none.json'):
    self.assertEqual(sender.load_state(),{'date':'','sent_indices':[],'sent_slots':[]})
+ def test_non_object_state_file_is_treated_as_empty(self):
+  with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)/'state.json'):
+   for raw in ('[]','"text"','null'):
+    sender.STATE_FILE.write_text(raw)
+    self.assertEqual(sender.load_state(),{'date':'','sent_indices':[],'sent_slots':[]},raw)
  def test_save_failure_logs_warning_instead_of_raising(self):
   import io,contextlib
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'STATE_FILE',Path(d)),io.StringIO() as buf,contextlib.redirect_stdout(buf):

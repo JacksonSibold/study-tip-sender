@@ -63,9 +63,12 @@ def load_state() -> dict:
         return {"date": "", "sent_indices": [], "sent_slots": []}
     try:
         with STATE_FILE.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
     except Exception:
         return {"date": "", "sent_indices": [], "sent_slots": []}
+    if not isinstance(data, dict):
+        return {"date": "", "sent_indices": [], "sent_slots": []}
+    return data
 
 
 def save_state(state: dict) -> None:
