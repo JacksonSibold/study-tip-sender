@@ -52,6 +52,10 @@ class ContentTests(unittest.TestCase):
   for data in bad:
    with self.subTest(data=data),tempfile.TemporaryDirectory() as d,patch.object(sender,'CONTENT_FILE',self._write_content(d,data)):
     with self.assertRaises(ValueError):sender.load_content()
+ def test_content_with_no_entries_is_rejected(self):
+  for data in ({},{'tips':[]}):
+   with self.subTest(data=data),tempfile.TemporaryDirectory() as d,patch.object(sender,'CONTENT_FILE',self._write_content(d,data)):
+    with self.assertRaises(ValueError):sender.load_content()
  def test_missing_content_file_raises(self):
   with tempfile.TemporaryDirectory() as d, patch.object(sender,'CONTENT_FILE',Path(d)/'absent.json'):
    with self.assertRaises(FileNotFoundError):sender.load_content()

@@ -81,6 +81,8 @@ def load_content() -> list:
         items.append(f"Def: {d['term']} - {d['definition']}")
     for q in _record_list(data, "questions", ("q", "a")):
         items.append(f"Q: {q['q']} A: {q['a']}")
+    if not items:
+        raise ValueError("content file has no tips, concepts, definitions or questions")
     return items
 
 
