@@ -127,4 +127,9 @@ class StateTests(unittest.TestCase):
    state={'date':'2027-05-01','sent_indices':[2],'sent_slots':['2027-05-01 08']}
    self.assertIs(sender.reset_state_if_new_day(state,'2027-05-01'),state)
    self.assertFalse(sender.STATE_FILE.exists())
+class RunTests(unittest.TestCase):
+ def test_unloadable_content_exits_with_nonzero_status(self):
+  with tempfile.TemporaryDirectory() as d,patch.object(sender,'PHONE_NUMBER','15555550100'),patch.object(sender,'RESEND_API_KEY','test-only'),patch.object(sender,'CONTENT_FILE',Path(d)/'missing.json'):
+   with self.assertRaises(SystemExit) as cm:sender.run()
+  self.assertNotEqual(cm.exception.code,0)
 if __name__=='__main__':unittest.main()

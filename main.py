@@ -195,7 +195,7 @@ def run() -> None:
         log(f"Loaded {len(content)} content items.")
     except Exception as e:
         log(f"FATAL: cannot load content: {e}")
-        return
+        raise SystemExit(1)
 
     state = load_state()
 
