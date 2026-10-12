@@ -4,3 +4,6 @@ sent_state.json
 __pycache__/
 *.pyc
 .venv/
+sent_state.tmp
+venv/
+.pytest_cache/
